@@ -28,10 +28,9 @@ public class UserController : ControllerBase
             usr.Mail == user.Mail
             );
             if (exist == null) return Unauthorized("Invalid email or password.");
-            Console.WriteLine("mail ->"+user.Mail);
-            // bool isValidPassword = BCryptPasswordHasher.VerifyPassword(user.Password, exist.Password);
-            // if (!isValidPassword)
-            //     return Unauthorized("Invalid email or password.");
+            bool isValidPassword = BCryptPasswordHasher.VerifyPassword(user.Password, exist.Password);
+            if (!isValidPassword)
+                return Unauthorized("Invalid email or password.");
             return Ok(new { jwtToken = authService.GenerateJwtToken(exist.Id) });
         }
         catch

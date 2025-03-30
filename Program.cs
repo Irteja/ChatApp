@@ -1,4 +1,5 @@
 using chatapp.Data;
+using chatapp.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -12,6 +13,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages();
 builder.Services.AddHttpClient();
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddDbContext<ChatAppDbContext>(options =>
 				options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -27,7 +29,7 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-	options.SaveToken = true; 
+	options.SaveToken = true;
 	options.RequireHttpsMetadata = false;
 	options.TokenValidationParameters = new TokenValidationParameters
 	{
@@ -61,7 +63,11 @@ app.UseJwtInjection();
 app.UseAuthentication();
 app.UseAuthorization();
 
+
+
 app.MapRazorPages();
 app.MapControllers();
+app.MapHub<ChatHub>("/chathub");
+
 
 app.Run();
