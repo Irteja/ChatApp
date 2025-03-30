@@ -1,0 +1,212 @@
+@page "{SelectedUserId?}"
+@model chatapp.Pages.Conversations.ChatModel
+@{
+    ViewData["Title"] = "Chat";
+}
+
+<div class="container-fluid vh-100 d-flex">
+    <!-- Left Panel: User List -->
+    <div class="col-4 bg-light border-end p-3" style="overflow-y: auto; max-height: 100vh;">
+        <h4>Users</h4>
+        <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#searchUserModal">
+            Search New User
+        </button>
+        <ul class="list-group">
+            @foreach (var user in Model.ContactList)
+            {
+                <li class="list-group-item d-flex align-items-center @(Model.SelectedUserId == user.Id ? "active" : "")">
+                    <a href="?SelectedUserId=@user.Id" class="d-flex align-items-center text-decoration-none text-dark">
+                        <img src="@user.Avatar" alt="@user.Name" class="rounded-circle me-2" style="width: 40px; height: 40px;" />
+                        <span>@user.Name</span>
+                    </a>
+                </li>
+            }
+        </ul>
+    </div>
+
+<!-- Right Panel: Chat Area -->
+<div class="col-8 d-flex flex-column p-3">
+    @if (Model.SelectedUser != null)
+    {
+        <h4>Chat with @Model.SelectedUser.Name</h4>
+        <div class="chat-messages flex-grow-1 mb-3 p-3 bg-white border rounded" style="overflow-y: auto; max-height: 70vh;" id="chatMessages">
+            @foreach (var message in Model.Messages)
+            {
+                var isSentByCurrentUser = message.SenderId == @Model.currentUserId; 
+                <div class="message @(isSentByCurrentUser ? "text-end" : "text-start") mb-2">
+                    <span class="badge @(isSentByCurrentUser ? "bg-primary" : "bg-secondary")">
+                        @message.Text
+                    </span>
+                    <small class="text-muted d-block">@message.CreatedAt.ToString("HH:mm")</small>
+                </div>
+            }
+        </div>
+
+        <!-- Message Input (No Form) -->
+        <div class="d-flex">
+            <input type="text" id="newMessageInput" class="form-control me-2" placeholder="Type a message..." />
+            <button type="button" id="sendMessageBtn" class="btn btn-primary">Send</button>
+        </div>
+    }
+    else
+    {
+        <p class="text-center mt-5">Select a user to start chatting!</p>
+    }
+</div>
+
+
+<!-- Search User Modal -->
+<div class="modal fade" id="searchUserModal" tabindex="-1" aria-labelledby="searchUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="searchUserModalLabel">Search Users</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="modalSearchInput" class="form-control mb-3" placeholder="Search for a user..." />
+                <ul class="list-group" id="modalUserList" style="max-height: 300px; overflow-y: auto;">
+                    <!-- Populated by JavaScript -->
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const modalSearchInput = document.getElementById("modalSearchInput");
+            const modalUserList = document.getElementById("modalUserList");
+            let users = [];
+
+            const sendMessageBtn = document.getElementById("sendMessageBtn");
+            const newMessageInput = document.getElementById("newMessageInput");
+            const chatMessages = document.getElementById("chatMessages");
+
+            // Fetch users when modal is opened
+            document.getElementById("searchUserModal").addEventListener("shown.bs.modal", function () {
+                fetch("http://localhost:5124/api/user/all") // Adjust to your API endpoint
+                    .then(response => {
+                        if (!response.ok) throw new Error("Failed to fetch users");
+                        return response.json();
+                    })
+                    .then(data => {
+                        users = data;
+                        renderModalUsers(users); // Initial render
+                    })
+                    .catch(error => {
+                        console.error("Error fetching users:", error);
+                        modalUserList.innerHTML = "<li class='list-group-item'>Error loading users</li>";
+                    });
+            });
+
+            // Search filter in modal
+            modalSearchInput.addEventListener("input", function () {
+                const query = this.value.toLowerCase();
+                const filteredUsers = users.filter(user =>
+                    user.name.toLowerCase().includes(query)
+                );
+                renderModalUsers(filteredUsers);
+            });
+
+            // Render users in modal
+            function renderModalUsers(userArray) {
+                modalUserList.innerHTML = ""; // Clear current list
+                userArray.forEach(user => {
+                    const li = document.createElement("li");
+                    li.className = "list-group-item d-flex align-items-center";
+                    li.innerHTML = `
+                         <img src="${user.avatar}" alt="${user.name}" class="rounded-circle me-2" style="width: 40px; height: 40px;" />
+                            <span>${user.name}</span>
+                        </a>
+                    `;
+                        li.addEventListener("click", async function () {
+                            // Disable further clicks until API call completes
+                             li.style.pointerEvents = "none"; 
+                            li.innerHTML += " <span class='text-muted'>Starting...</span>";
+
+                            try {
+                                const response = await fetch("http://localhost:5124/api/conversation/create", {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json"
+                                    },
+                                    body: JSON.stringify({
+                                        CreatorId: "@Model.currentUserId", // Current user as creator
+                                        ParticipantId: user.id    // Selected user as participant
+                                    })
+                                });
+
+                                if (!response.ok) {
+                                    throw new Error("Failed to start conversation");
+                                }
+
+                                window.location.href = `?SelectedUserId=${user.id}`;
+                            } catch (error) {
+                                console.error("Error starting conversation:", error);
+                                alert("Failed to start conversation. Please try again.");
+                                li.style.pointerEvents = "auto"; // Re-enable on error
+                                li.querySelector(".text-muted")?.remove(); // Clean up "Starting..."
+                            }
+                        });
+                    if(user.id!= "@Model.currentUserId")
+                         modalUserList.appendChild(li);
+                });
+            }
+
+            if (sendMessageBtn && newMessageInput) {
+                sendMessageBtn.addEventListener("click", async function () {
+                    const messageText = newMessageInput.value.trim();
+                    if (!messageText) return; // Ignore empty messages
+
+                    try {
+                        const response = await fetch("http://localhost:5124/api/conversation/send", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                ConversationId:"@Model.SelectedUser.conversationId",
+                                SenderId: "@Model.currentUserId",
+                                ReceiverId: "@Model.SelectedUserId", 
+                                Text: messageText
+                            })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error("Failed to send message");
+                        }
+
+                        // On success, append the message to the chat area
+                        const newMessageDiv = document.createElement("div");
+                        newMessageDiv.className = "message text-end mb-2";
+                        newMessageDiv.innerHTML = `
+                            <span class="badge bg-primary">${messageText}</span>
+                            <small class="text-muted d-block">${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small>
+                        `;
+                        chatMessages.appendChild(newMessageDiv);
+                        chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to bottom
+
+                        // Clear the input
+                        newMessageInput.value = "";
+                    } catch (error) {
+                        console.error("Error sending message:", error);
+                        alert("Failed to send message. Please try again.");
+                    }
+                });
+
+                // Optional: Send message on Enter key
+                newMessageInput.addEventListener("keypress", function (e) {
+                    if (e.key === "Enter") {
+                        sendMessageBtn.click();
+                    }
+                });
+            }
+        });
+    </script>
+}
